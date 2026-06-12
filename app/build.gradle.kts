@@ -4,16 +4,12 @@ plugins {
 
 android {
     namespace = "com.example.appdomaacessibilidade"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37 // <-- Valor alterado de 36 para 37. Sintaxe direta e limpa (i.e., sem usar a sintaxe "release(37) { minorApiLevel = 1 }")!
 
     defaultConfig {
         applicationId = "com.example.appdomaacessibilidade"
-        minSdk = 30
-        targetSdk = 36
+        minSdk = 30 // <-- Não mexa neste, deixe 30!
+        targetSdk = 37 // <-- Atualizado para acompanhar o compileSdk
         versionCode = 1
         versionName = "1.0"
 
