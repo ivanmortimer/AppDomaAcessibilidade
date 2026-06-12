@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AppDomaAcessibilidade</string>
+    <string name="conectar_bluetooth">Conectar Bluetooth</string>
 </resources>
