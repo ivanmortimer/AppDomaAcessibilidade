@@ -19,13 +19,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private lateinit var audioHelper: AudioHelper
     private lateinit var audioManager: AudioManager
-    private lateinit var tts: TextToSpeech // Variável do motor de voz
+    private lateinit var tts: TextToSpeech
+
+    // Controle de estado para saber em qual tela o usuário está
+    private var isMenuPrincipal = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Inicialização dos gerenciadores de áudio e do TTS
         audioHelper = AudioHelper(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         tts = TextToSpeech(this, this)
@@ -33,19 +35,55 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val listView: ListView = findViewById(R.id.listView)
         val buttonBluetooth: Button = findViewById(R.id.buttonBluetooth)
 
-        // Preenchendo a ListView com funcionalidades
-        val funcionalidadesDoma = arrayOf("Ler Mensagens", "Alertas de Segurança", "Instruções de Treinamento")
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, funcionalidadesDoma)
-        listView.adapter = adapter
+        // Nossos dados (Mock)
+        val menuPrincipal = arrayOf("Ler Mensagens", "Alertas de Segurança", "Instruções de Treinamento")
+        val mensagensMock = arrayOf("← Voltar", "Mensagem 1: Reunião às 14 horas", "Mensagem 2: O seu pacote da Doma chegou")
+        val alertasMock = arrayOf("← Voltar", "Alerta: Risco de chuva forte na região", "Alerta: Piso escorregadio no setor B")
+        val instrucoesMock = arrayOf("← Voltar", "Passo 1: Desligue a energia da máquina", "Passo 2: Utilize sempre os óculos de proteção")
 
-        // PASSO 5 e 6: Reprodução de Áudio!
-        // Quando o usuário clicar em um item da lista, o relógio falará o texto.
+        // Carrega o Menu Principal ao iniciar
+        val adapterMenu = ArrayAdapter(this, android.R.layout.simple_list_item_1, menuPrincipal)
+        listView.adapter = adapterMenu
+
+        // Lógica de cliques na lista
         listView.setOnItemClickListener { _, _, position, _ ->
-            val textoParaFalar = funcionalidadesDoma[position]
-            falarTexto(textoParaFalar)
+            if (isMenuPrincipal) {
+                // Estamos no Menu Principal: Lemos o texto e abrimos a sub-lista
+                val textoClicado = menuPrincipal[position]
+                falarTexto(textoClicado)
+
+                val novoAdapter = when (position) {
+                    0 -> ArrayAdapter(this, android.R.layout.simple_list_item_1, mensagensMock)
+                    1 -> ArrayAdapter(this, android.R.layout.simple_list_item_1, alertasMock)
+                    2 -> ArrayAdapter(this, android.R.layout.simple_list_item_1, instrucoesMock)
+                    else -> adapterMenu
+                }
+                listView.adapter = novoAdapter
+                isMenuPrincipal = false
+
+            } else {
+                // Estamos em uma Sub-lista
+                val adapterAtual = listView.adapter as ArrayAdapter<String>
+                val textoClicado = adapterAtual.getItem(position) ?: ""
+
+                // TRATAMENTO DE ACESSIBILIDADE: Limpa o texto para a voz
+                val textoParaFalar = if (textoClicado.contains("Voltar")) {
+                    "Voltar"
+                } else {
+                    textoClicado
+                }
+
+                falarTexto(textoParaFalar)
+
+                // Se o usuário clicou em Voltar, carregamos o Menu Principal novamente
+                if (textoClicado == "← Voltar") {
+                    listView.adapter = adapterMenu
+                    isMenuPrincipal = true
+                }
+            }
         }
 
-        // Detecção Dinâmica de Dispositivos de Áudio (mantida igual)
+        // Restante do código intocado (Bluetooth e Callbacks)
         audioManager.registerAudioDeviceCallback(object : AudioDeviceCallback() {
             override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
                 super.onAudioDevicesAdded(addedDevices)
@@ -53,7 +91,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     Toast.makeText(this@MainActivity, "Fone Bluetooth conectado!", Toast.LENGTH_SHORT).show()
                 }
             }
-
             override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
                 super.onAudioDevicesRemoved(removedDevices)
                 if (!audioHelper.audioOutputAvailable(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)) {
@@ -62,12 +99,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }, null)
 
-        // Facilitando a Conexão Bluetooth
         buttonBluetooth.setOnClickListener {
-            // 1. Acessibilidade: Lê em voz alta o texto atual contido no botão
             falarTexto(buttonBluetooth.text.toString())
-
-            // 2. Lógica original de conexão
             if (!audioHelper.audioOutputAvailable(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)) {
                 val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -79,17 +112,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             } else {
                 val aviso = "Fone já está conectado."
                 Toast.makeText(this, aviso, Toast.LENGTH_SHORT).show()
-
-                // Bônus de acessibilidade: se já estiver conectado, o relógio fala o aviso!
                 falarTexto(aviso)
             }
         }
     }
 
-    // Configuração do motor de voz
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            // Tenta configurar o idioma para Português do Brasil
             val result = tts.setLanguage(Locale("pt", "BR"))
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Toast.makeText(this, "Idioma não suportado pelo TTS", Toast.LENGTH_SHORT).show()
@@ -99,21 +128,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // Função auxiliar para falar o texto
     private fun falarTexto(texto: String) {
-        // Verifica se há alguma saída de áudio disponível (alto-falante ou bluetooth)
         val hasSpeaker = audioHelper.audioOutputAvailable(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
         val hasBluetooth = audioHelper.audioOutputAvailable(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
 
         if (hasSpeaker || hasBluetooth) {
             tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "")
-            Toast.makeText(this, "Reproduzindo: $texto", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Reproduzindo áudio", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Nenhuma saída de áudio detectada.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Libera a memória do TTS quando o app é fechado
     override fun onDestroy() {
         if (::tts.isInitialized) {
             tts.stop()
